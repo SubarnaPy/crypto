@@ -45,7 +45,7 @@ const createEmailService = () => {
     };
   }
 
-  // Fallback to SMTP (Gmail or Resend SMTP if explicitly configured)
+  // Fallback to SMTPttttt (Gmail or Resend SMTP if explicitly configured)
   if ((emailProvider === 'gmail' && process.env.EMAIL_USER && process.env.EMAIL_PASS) || (emailProvider === 'resend' && process.env.RESEND_API_KEY)) {
     if (emailProvider === 'gmail') console.log('✅ Using Gmail SMTP');
     if (emailProvider === 'resend') console.log('✅ Using Resend SMTP');
