@@ -3,6 +3,7 @@
 // - EMAIL_PROVIDER: 'resend' or 'gmail' (optional). If omitted, RESEND_API_KEY presence prefers 'resend'.
 // - RESEND_API_KEY: API key for Resend (preferred in production). When present, the Resend SDK is used if available.
 // - EMAIL_USER, EMAIL_PASS: Gmail SMTP credentials for local development (when EMAIL_PROVIDER=gmail).
+// - EMAIL_FROM: The default "from" address for emails (optional).
 // Note: The file will try to require('resend') lazily so running locally without the SDK still works.
 const nodemailer = require('nodemailer');
 let Resend;
@@ -13,6 +14,9 @@ try {
 } catch (err) {
   Resend = null;
 }
+
+// Consistent "from" address. Uses EMAIL_FROM, falls back to EMAIL_USER, then a default.
+const DEFAULT_FROM_EMAIL = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'Kryptronix <onboarding@resend.dev>';
 
 // Helper send function - will use Resend API when available, otherwise nodemailer transport
 const createEmailService = () => {
@@ -29,7 +33,7 @@ const createEmailService = () => {
       sendMail: async ({ from, to, subject, html }) => {
         try {
           const res = await resendClient.emails.send({
-            from: from || process.env.EMAIL_USER || 'mondalsubarna29@gmail.com',
+            from: from || DEFAULT_FROM_EMAIL,
             to,
             subject,
             html,
@@ -45,13 +49,18 @@ const createEmailService = () => {
     };
   }
 
-  // Fallback to SMTPttttt (Gmail or Resend SMTP if explicitly configured)
+  // Fallback to SMTP (Gmail or Resend SMTP if explicitly configured)
   if ((emailProvider === 'gmail' && process.env.EMAIL_USER && process.env.EMAIL_PASS) || (emailProvider === 'resend' && process.env.RESEND_API_KEY)) {
     if (emailProvider === 'gmail') console.log('✅ Using Gmail SMTP');
     if (emailProvider === 'resend') console.log('✅ Using Resend SMTP');
 
     const transportConfig = emailProvider === 'gmail'
-      ? { service: 'gmail', auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS } }
+      ? { 
+          host: 'smtp.gmail.com', 
+          port: 465, 
+          secure: true, 
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS } 
+        }
       : { host: 'smtp.resend.com', secure: true, port: 465, auth: { user: 'resend', pass: process.env.RESEND_API_KEY } };
 
     const transporter = nodemailer.createTransport(transportConfig);
@@ -59,7 +68,9 @@ const createEmailService = () => {
     return {
       sendMail: async (mailOptions) => {
         try {
-          const info = await transporter.sendMail(mailOptions);
+          // Ensure a 'from' address is set if not provided in mailOptions
+          const optionsWithFrom = { ...mailOptions, from: mailOptions.from || DEFAULT_FROM_EMAIL };
+          const info = await transporter.sendMail(optionsWithFrom);
           console.log('SMTP send info:', info);
           return info;
         } catch (error) {
@@ -81,7 +92,7 @@ const createEmailService = () => {
   console.error('   For Resend (preferred production):');
   console.error('   EMAIL_PROVIDER=resend');
   console.error('   RESEND_API_KEY=re_your_key');
-  console.error('   EMAIL_USER=Kryptronix <onboarding@resend.dev>');
+  console.error('   EMAIL_FROM=Kryptronix <onboarding@resend.dev>');
   throw new Error('Email service not configured. Please check your .env file.');
 };
 
@@ -89,10 +100,10 @@ const createEmailService = () => {
 const emailService = createEmailService();
 
 const sendMagicLink = async (email, token) => {
-  const magicUrl = `${process.env.CLIENT_URL}/magic-login/${token}`;
+  const magicUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/magic-login/${token}`;
   
   return emailService.sendMail({
-    from: process.env.EMAIL_USER || 'onboarding@resend.dev',
+    from: DEFAULT_FROM_EMAIL,
     to: email,
     subject: 'Your Magic Login Link ✨',
     html: `
@@ -130,10 +141,10 @@ const sendMagicLink = async (email, token) => {
 };
 
 const sendVerificationEmail = async (email, token) => {
-  const verificationUrl = `${process.env.CLIENT_URL}/verify/${token}`;
+  const verificationUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/verify/${token}`;
   
   return emailService.sendMail({
-    from: process.env.EMAIL_USER || 'Kryptronix <onboarding@resend.dev>',
+    from: DEFAULT_FROM_EMAIL,
     to: email,
     subject: 'Verify Your Email ✅',
         html: `
