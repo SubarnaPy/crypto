@@ -33,6 +33,13 @@ const requestMagicLink = async (req, res) => {
     const magicToken = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '10m' });
     const magicUrl = `${process.env.CLIENT_URL}/magic-login/${magicToken}`;
     
+    // Store token hash and reset used flag
+    const tokenHash = crypto.createHash('sha256').update(magicToken).digest('hex');
+    user.magicLinkToken = tokenHash;
+    user.magicLinkUsed = false;
+    await user.save();
+    console.log(`[MAGIC-LINK] 🔐 Token stored and marked as unused`);
+    
     console.log(`[MAGIC-LINK] 📨 Sending email to: ${email}`);
     await sendMagicLink(email, magicToken);
 
@@ -253,6 +260,13 @@ const verifyMagicLink = async (req, res) => {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
+    // Check if token has already been used
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    if (user.magicLinkUsed || user.magicLinkToken !== tokenHash) {
+      console.error(`[MAGIC-LINK-VERIFY] ❌ Token already used or invalid for user: ${user.email}`);
+      return res.status(401).json({ message: 'This magic link has already been used or is invalid' });
+    }
+
     console.log(`[MAGIC-LINK-VERIFY] 👤 User found: ${user.email} (ID: ${user._id})`);
     console.log(`[MAGIC-LINK-VERIFY] 📋 User details:`, {
       role: user.role,
@@ -261,8 +275,11 @@ const verifyMagicLink = async (req, res) => {
       walletAddress: user.walletAddress || 'Not connected'
     });
 
+    // Mark token as used
+    user.magicLinkUsed = true;
     user.lastLogin = new Date();
     await user.save();
+    console.log(`[MAGIC-LINK-VERIFY] 🔒 Token marked as used`);
     console.log(`[MAGIC-LINK-VERIFY] 📅 Updated last login time`);
 
     const sessionToken = jwt.sign(

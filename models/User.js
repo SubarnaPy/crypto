@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema({
     default: false,
   },
   verificationToken: String,
+  magicLinkToken: String,
+  magicLinkUsed: {
+    type: Boolean,
+    default: false,
+  },
   lastLogin: Date,
 }, {
   timestamps: true,
